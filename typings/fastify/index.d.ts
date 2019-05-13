@@ -4,6 +4,7 @@ type Handler = (connection, request: IncomingMessage) => void
 
 declare module 'fastify' {
   interface RouteShorthandOptions {
-    wss?: boolean
+    websocket?: boolean
+    wsHandler?(connection, request: IncomingMessage): void
   }
 }

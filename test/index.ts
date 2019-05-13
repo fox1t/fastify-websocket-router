@@ -1,6 +1,7 @@
 import { test } from 'tap'
 import Fastify from 'fastify'
 import WebSocket from 'websocket-stream'
+import request from 'request'
 
 import wsRouter from '../src'
 
@@ -11,7 +12,7 @@ test('expose a websocket', t => {
   t.tearDown(() => fastify.close())
 
   fastify.register(wsRouter)
-  fastify.get('/', { wss: true }, ((conn, request) => {
+  fastify.get('/', { websocket: true }, ((conn, req) => {
     conn.setEncoding('utf8')
     conn.write('hello client')
     t.tearDown(conn.destroy.bind(conn))
@@ -46,7 +47,7 @@ test('expose a websocket with prefixed route', t => {
   fastify.register(wsRouter)
   fastify.register(
     function(instance, opts, next) {
-      instance.get('/echo', { wss: true }, ((conn, request) => {
+      instance.get('/echo', { websocket: true }, ((conn, req) => {
         conn.setEncoding('utf8')
         conn.write('hello client')
         t.tearDown(conn.destroy.bind(conn))
@@ -78,7 +79,58 @@ test('expose a websocket with prefixed route', t => {
   })
 })
 
-test(`should close on unregistered path`, t => {
+test('expose both a websocket and http route', t => {
+  t.plan(5)
+  const fastify = Fastify()
+
+  t.tearDown(() => fastify.close())
+
+  fastify.register(wsRouter)
+  fastify.register(
+    function(instance, opts, next) {
+      instance.route({
+        method: 'GET',
+        url: '/echo',
+        handler: (req, reply) => {
+          reply.send({ hello: 'world' })
+        },
+        wsHandler: (conn, req) => {
+          conn.setEncoding('utf8')
+          conn.write('hello client')
+          t.tearDown(conn.destroy.bind(conn))
+
+          conn.once('data', chunk => {
+            t.equal(chunk, 'hello server')
+            conn.end()
+          })
+        },
+      })
+      next()
+    },
+    { prefix: '/baz' },
+  )
+
+  fastify.listen(0, err => {
+    t.error(err)
+    const url = '//localhost:' + (fastify.server.address() as any).port + '/baz/echo'
+    const client = WebSocket('ws:' + url)
+    t.tearDown(client.destroy.bind(client))
+
+    client.setEncoding('utf8')
+    client.write('hello server')
+
+    client.once('data', chunk => {
+      t.equal(chunk, 'hello client')
+      client.end()
+    })
+    request('http:' + url, function(error, response, body) {
+      t.equal(response.statusCode, 200)
+      t.equal(body, '{"hello":"world"}')
+    })
+  })
+})
+
+test(`close on unregistered path`, t => {
   t.plan(2)
   const fastify = Fastify()
 
@@ -86,7 +138,7 @@ test(`should close on unregistered path`, t => {
 
   fastify.register(wsRouter)
 
-  fastify.get('/echo', { wss: true }, ((connection, request) => {
+  fastify.get('/echo', { websocket: true }, ((connection, req) => {
     connection.socket.on('message', message => {
       try {
         connection.socket.send(message)
@@ -109,7 +161,7 @@ test(`should close on unregistered path`, t => {
   })
 })
 
-test(`should open on registered path`, t => {
+test(`open on registered path`, t => {
   t.plan(2)
   const fastify = Fastify()
 
@@ -117,7 +169,7 @@ test(`should open on registered path`, t => {
 
   fastify.register(wsRouter)
 
-  fastify.get('/echo', { wss: true }, ((connection, request) => {
+  fastify.get('/echo', { websocket: true }, ((connection, req) => {
     connection.socket.on('message', message => {
       try {
         connection.socket.send(message)
@@ -141,7 +193,7 @@ test(`should open on registered path`, t => {
   })
 })
 
-test(`should send message and close`, t => {
+test(`send message and close`, t => {
   t.plan(5)
   const fastify = Fastify()
 
@@ -149,7 +201,7 @@ test(`should send message and close`, t => {
 
   fastify.register(wsRouter)
 
-  fastify.get('/', { wss: true }, ((connection, request) => {
+  fastify.get('/', { websocket: true }, ((connection, req) => {
     connection.socket.on('message', message => {
       t.equal(message, 'hi from client')
       connection.socket.send('hi from server')
@@ -181,14 +233,14 @@ test(`should send message and close`, t => {
   })
 })
 
-test(`should return 404 on http request`, async t => {
+test(`return 404 on http request`, async t => {
   const fastify = Fastify()
 
   t.tearDown(() => fastify.close())
 
   fastify.register(wsRouter)
 
-  fastify.get('/', { wss: true }, ((connection, request) => {
+  fastify.get('/', { websocket: true }, ((connection, req) => {
     connection.socket.on('message', message => {
       t.equal(message, 'hi from client')
       connection.socket.send('hi from server')

@@ -23,12 +23,17 @@ export = fp<Server, IncomingMessage, ServerResponse, {}>(
     fastify.register(ws, { handle })
 
     fastify.addHook('onRoute', routeOptions => {
-      if (routeOptions.wss) {
+      if (routeOptions.websocket) {
         const oldHandler = routeOptions.handler as any
         router.on('GET', routeOptions.path, (req, _) => oldHandler(req[kWs], req))
         routeOptions.handler = function(request, reply) {
           reply.code(404).send()
         }
+      } else if (routeOptions.wsHandler) {
+        if (typeof routeOptions.wsHandler !== 'function') {
+          throw new Error('Invalid wsHandler function')
+        }
+        router.on('GET', routeOptions.path, (req, _) => routeOptions.wsHandler!(req[kWs], req))
       }
     })
 
