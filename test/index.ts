@@ -37,6 +37,47 @@ test('expose a websocket', t => {
   })
 })
 
+test('expose a websocket with prefixed route', t => {
+  t.plan(3)
+  const fastify = Fastify()
+
+  t.tearDown(() => fastify.close())
+
+  fastify.register(wsRouter)
+  fastify.register(
+    function(instance, opts, next) {
+      instance.get('/echo', { wss: true }, ((conn, request) => {
+        conn.setEncoding('utf8')
+        conn.write('hello client')
+        t.tearDown(conn.destroy.bind(conn))
+
+        conn.once('data', chunk => {
+          t.equal(chunk, 'hello server')
+          conn.end()
+        })
+      }) as any)
+      next()
+    },
+    { prefix: '/baz' },
+  )
+
+  fastify.listen(0, err => {
+    t.error(err)
+    const client = WebSocket(
+      'ws://localhost:' + (fastify.server.address() as any).port + '/baz/echo',
+    )
+    t.tearDown(client.destroy.bind(client))
+
+    client.setEncoding('utf8')
+    client.write('hello server')
+
+    client.once('data', chunk => {
+      t.equal(chunk, 'hello client')
+      client.end()
+    })
+  })
+})
+
 test(`should close on unregistered path`, t => {
   t.plan(2)
   const fastify = Fastify()
