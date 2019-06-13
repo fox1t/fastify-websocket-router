@@ -1,4 +1,8 @@
 # Fastify websocket router
+
+# This pacakge has been deprecated. All of the features are now integrated in [fastify-websocket](https://github.com/fastify/fastify-websocket/).
+
+
 WebSocket endpoints for fastify
 
 Built on top of [fastify-websocket](https://github.com/fastify/fastify-websocket/), adds support for routing. It lets you define WebSocket endpoints like any other type of route, with different handler for each. The WebSocket support is provided by [websocket-stream](https://github.com/maxogden/websocket-stream) library.
